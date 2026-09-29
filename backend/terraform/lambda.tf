@@ -88,6 +88,9 @@ resource "aws_lambda_function" "api" {
       EXPIRES_IN   = var.jwt_expires_in
       # sem SMTP na nuvem: as rotas respondem como antes, sem enviar
       EMAIL_ENABLED = "false"
+      # os segredos sao lidos do SSM uma vez por container: mudar a versao
+      # altera a configuracao da funcao e descarta os containers com o valor velho
+      SECRETS_VERSION = tostring(var.secrets_version)
     }
   }
 

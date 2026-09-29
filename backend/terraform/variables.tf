@@ -53,5 +53,5 @@ variable "jwt_expires_in" {
 variable "secrets_version" {
   description = "Versao dos segredos write-only. O Terraform nao enxerga o valor gravado, entao so reescreve quando este numero muda: incremente ao trocar um segredo."
   type        = number
-  default     = 1
+  default     = 2
 }
