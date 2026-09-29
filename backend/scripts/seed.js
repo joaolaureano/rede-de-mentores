@@ -61,6 +61,13 @@ const MENTORIAS = [
   [7, 'Organizando as finanças pessoais', 'Finanças', ['Online'], ['Sexta'], ['19:00'], 'Orçamento, reserva de emergência e primeiros investimentos.', true],
 ];
 
+const PROJECTS = [
+  'Quero montar um plano de estudos para os próximos meses.',
+  'Estou preparando meu TCC e preciso de orientação sobre o escopo.',
+  'Tenho uma ideia de projeto e queria validar o primeiro passo.',
+  'Busco feedback sobre meu portfólio antes de aplicar para estágios.',
+];
+
 const initials = (name) => name.split(' ').map((p) => p[0]).slice(0, 2).join('');
 const escapeXml = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
 
@@ -124,11 +131,21 @@ const run = async () => {
   let booked = 0;
   for (const [k, [mi, title, area, options, days, hours, description, approved]] of MENTORIAS.entries()) {
     const dateTime = await getNextDateTime([], days, hours);
-    // reserva o 2o horario de algumas mentorias aprovadas: a vitrine mostra
-    // horarios ocupados e livres, e a mentorada demo ja tem inscricoes
-    if (approved && k % 3 === 0 && dateTime[1]) {
-      Object.assign(dateTime[1].times[0], { flagBusy: true, mentoradoId: menteeCpfs[k % menteeCpfs.length], typeMentoring: options[0], descProject: 'Quero montar um plano de estudos para os próximos meses.' });
-      booked += 1;
+    // Aulas ja marcadas: toda mentoria aprovada tem horarios reservados por
+    // mentorados diferentes, para as paginas de mentor e de mentorado ja
+    // abrirem com agenda. A mentorada demo entra em varias delas.
+    if (approved) {
+      [[1, k % menteeCpfs.length], [2, (k + 1) % menteeCpfs.length], [3, 0]]
+        .filter(([slot]) => dateTime[slot] && (slot !== 3 || k % 2 === 0))
+        .forEach(([slot, mentee]) => {
+          Object.assign(dateTime[slot].times[0], {
+            flagBusy: true,
+            mentoradoId: menteeCpfs[mentee],
+            typeMentoring: options[slot % options.length],
+            descProject: PROJECTS[(k + slot) % PROJECTS.length],
+          });
+          booked += 1;
+        });
     }
     await mentorias.insert({
       cpf: mentorCpfs[mi], title, description, knowledgeArea: area, mentoringOption: options,
