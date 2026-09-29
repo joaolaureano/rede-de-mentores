@@ -1,0 +1,6 @@
+{
+  "singleQuote": true,
+  "trailingComma": "es5",
+  "arrowParens": "always",
+  "no-unused-vars": [2, { "vars": "all", "varsIgnorePattern": "[iI]gnored" }]
+}

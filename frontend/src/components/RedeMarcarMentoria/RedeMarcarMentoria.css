@@ -1,0 +1,151 @@
+.rede-marcar-mentoria .content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 40px;
+}
+
+.rede-marcar-mentoria .content * {
+  color: #00273F;
+}
+
+.rede-marcar-mentoria .content>.close-icon>img {
+  transform: rotateZ(45deg);
+}
+
+.rede-marcar-mentoria .content>.close-icon:focus {
+  box-shadow: 0 0 5px rgba(0, 39, 63, 0.5);
+  border: none;
+  outline: none;
+}
+
+.rede-marcar-mentoria .content>.close-icon {
+  position: absolute;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 5px;
+  top: 10px;
+  right: 10px;
+  background-color: transparent;
+  border: none;
+  outline: none !important;
+  border-radius: 5px;
+  box-sizing: border-box;
+  transition: box-shadow 0.4s ease;
+}
+
+.rede-marcar-mentoria .content>.bloco {
+  border: 2px solid #00273F;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.rede-marcar-mentoria .content>.bloco.info {
+  display: flex;
+  flex-wrap: wrap;
+  flex-direction: row;
+  justify-content: center;
+  align-items: stretch;
+}
+
+.rede-marcar-mentoria .content>.bloco.info>.foto-mentoria {
+  display: flex;
+}
+
+.rede-marcar-mentoria .content>.bloco.info>.foto-mentoria img {
+  width: 260px;
+  height: 100%;
+}
+
+.rede-marcar-mentoria .content>.bloco.info>.informacao {
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  justify-content: center;
+  align-items: center;
+}
+
+.rede-marcar-mentoria .content>.bloco.info>.informacao>.titulo {
+  padding: 5px;
+  font-weight: 700;
+}
+
+.rede-marcar-mentoria .content>.bloco.info>.informacao>.mentor {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+
+.rede-marcar-mentoria .content>.bloco.info>.informacao>.mentor>.mentor-foto {}
+
+.rede-marcar-mentoria .content>.bloco.info>.informacao>.mentor>.mentor-foto img {
+  border-radius: 100%;
+  width: 70px;
+  height: 70px;
+}
+
+.rede-marcar-mentoria .content>.bloco.info>.informacao>.mentor>.mentor-nome {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 5px 10px;
+}
+
+.rede-marcar-mentoria .content>.bloco.info>.informacao>.data-hora {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.rede-marcar-mentoria .content>.bloco.info>.informacao>.data-hora>.data {
+  padding: 5px;
+}
+
+.rede-marcar-mentoria .content>.bloco.info>.informacao>.data-hora>.traco {
+  padding: 5px;
+}
+
+.rede-marcar-mentoria .content>.bloco.info>.informacao>.data-hora>.hora {
+  border-radius: 5px;
+  background-color: #97C0E2;
+  padding: 5px 15px;
+}
+
+.rede-marcar-mentoria .content>.subtitulo {
+  margin-top: 10px;
+  width: 100%;
+  text-align: left;
+}
+
+.rede-marcar-mentoria .content>.bloco.descricao {
+  width: 100%;
+  display: flex;
+  justify-content: stretch;
+  align-items: stretch;
+}
+
+.rede-marcar-mentoria .content>.bloco.descricao>* {
+  width: 100%;
+}
+
+.rede-marcar-mentoria .content>.bloco.descricao textarea {
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.rede-marcar-mentoria .content>.bloco.descricao label {
+  margin: 0;
+  display: none;
+}
+
+.rede-marcar-mentoria .content>.radios {
+  padding: 10px;
+}
+
+.rede-marcar-mentoria .content>.radios>label {
+  padding: 5px;
+}
