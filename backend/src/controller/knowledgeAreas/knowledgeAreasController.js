@@ -1,23 +1,16 @@
-import admin from '../../configs/database/connection';
+import * as areas from '../../repositories/areaRepository';
+import * as mentorias from '../../repositories/mentoriaRepository';
+import * as users from '../../repositories/userRepository';
 
 require('dotenv').config();
 
-const db = admin.firestore();
-
 async function getAllMentoring() {
-  const mentoriaCollection = db.collection('mentoria');
-  const results = [];
-  await mentoriaCollection
-    .where('mentoringApproved', '==', true)
-    .where('flagDisable', '==', false)
-    .where('isVisible', '==', true)
-    .get()
-    .then((snapshot) => {
-      snapshot.forEach((doc) => {
-        results.push(doc.data());
-      });
-    });
-  return results;
+  const results = await mentorias.listWhere({
+    mentoringApproved: true,
+    flagDisable: false,
+    isVisible: true,
+  });
+  return results.map((mentoria) => mentoria.data);
 }
 
 async function filterValidKnowledgeAreas(knowledgAreas) {
@@ -35,14 +28,8 @@ async function filterValidKnowledgeAreas(knowledgAreas) {
 }
 
 async function getAll() {
-  const knowledgeAreasCollection = db.collection('area_conhecimento');
-  const result = [];
-  await knowledgeAreasCollection.get().then((snapshot) => {
-    return snapshot.forEach((res) => {
-      result.push(res.data());
-    });
-  });
-  return result;
+  const result = await areas.list();
+  return result.map((area) => area.data);
 }
 
 module.exports = {
@@ -79,26 +66,14 @@ module.exports = {
     try {
       const { name } = request.body;
 
-      const knowledgeAreasCollection = db.collection('area_conhecimento');
-
-      let idArea = null;
-      await knowledgeAreasCollection
-        .where('name', '==', name)
-        .get()
-        .then((snapshot) => {
-          return snapshot.forEach((res) => {
-            idArea = res.data();
-          });
-        });
-      if (idArea) {
+      const existing = await areas.findByName(name);
+      if (existing) {
         return response
           .status(400)
           .send({ error: 'Área de conhecimento já existe.' });
       }
 
-      await knowledgeAreasCollection.add({
-        name,
-      });
+      await areas.insert(name);
       return response.status(201).send();
     } catch (e) {
       return response.status(500).json({
@@ -108,29 +83,15 @@ module.exports = {
   },
   async update(request, response) {
     try {
-      // eslint-disable-next-line prefer-const
-      let { name, newName } = request.body;
+      const { name, newName } = request.body;
 
-      const knowledgeAreasCollection = db.collection('area_conhecimento');
-
-      let idArea = null;
-      await knowledgeAreasCollection
-        .where('name', '==', name)
-        .get()
-        .then((snapshot) => {
-          return snapshot.forEach((res) => {
-            idArea = res.id;
-          });
-        });
-      if (!idArea) {
+      const area = await areas.findByName(name);
+      if (!area) {
         return response
           .status(400)
           .send({ error: 'Área de conhecimento não existe.' });
       }
-      name = newName;
-      await knowledgeAreasCollection.doc(idArea).set({
-        name,
-      });
+      await areas.rename(area.id, newName);
       return response.status(200).send();
     } catch (e) {
       return response.status(500).json({
@@ -142,22 +103,12 @@ module.exports = {
     try {
       const { name } = request.body;
 
-      const knowledgeAreasCollection = db.collection('area_conhecimento');
-
-      let idArea = null;
-      await knowledgeAreasCollection
-        .where('name', '==', name)
-        .get()
-        .then((snapshot) => {
-          return snapshot.forEach((res) => {
-            idArea = res.id;
-          });
-        });
-      if (!idArea) {
+      const area = await areas.findByName(name);
+      if (!area) {
         return response.status(400).send({ error: 'Usuário não existe.' });
       }
 
-      await knowledgeAreasCollection.doc(idArea).delete();
+      await areas.remove(area.id);
       return response.status(200).send();
     } catch (e) {
       return response.status(500).json({
@@ -165,6 +116,8 @@ module.exports = {
       });
     }
   },
+  // `user` e o CPF do usuario: o codigo antigo consultava um campo `user` que
+  // nao existia na colecao, e a rota nunca encontrava ninguem
   async integrateUserArea(request, response) {
     try {
       const { name, user } = request.body;
@@ -173,45 +126,24 @@ module.exports = {
           .status(404)
           .json({ error: 'Não foi encontrado esse usuário' });
       }
-      const knowledgeAreasCollection = db.collection('area_conhecimento');
-      const userCollection = db.collection('user');
-      let resultArea = null;
-      let resultUser = null;
       const listAreas = new Set();
-      await knowledgeAreasCollection
-        .where('name', '==', name)
-        .get()
-        .then((snapshot) => {
-          return snapshot.forEach((res) => {
-            resultArea = res.data().name;
-          });
-        });
-      await userCollection
-        .where('user', '==', user)
-        .get()
-        .then((snapshot) => {
-          return snapshot.forEach((res) => {
-            resultUser = res.id;
-            if (res.data().areas) {
-              const { areas } = res.data();
-              areas.forEach((area) => listAreas.add(area));
-            }
-          });
-        });
-      if (!resultArea) {
+      const area = await areas.findByName(name);
+      const userDoc = await users.findByCpf(user);
+      if (userDoc && userDoc.data.areas) {
+        userDoc.data.areas.forEach((areaName) => listAreas.add(areaName));
+      }
+      if (!area) {
         return response
           .status(404)
           .json({ error: 'Não foi encontrado essa área de conhecimento' });
       }
-      if (!resultUser) {
+      if (!userDoc) {
         return response
           .status(404)
           .json({ error: 'Não foi encontrado esse usuário' });
       }
-      listAreas.add(resultArea);
-      await userCollection.doc(resultUser).update({
-        areas: Array.from(listAreas),
-      });
+      listAreas.add(area.data.name);
+      await users.update(userDoc.id, { areas: Array.from(listAreas) });
       return response.status(200).send();
     } catch (e) {
       return response.status(500).json({
@@ -227,42 +159,26 @@ module.exports = {
           .status(404)
           .json({ error: 'Não foi encontrado esse usuário' });
       }
-      const userCollection = db.collection('user');
-      let resultUser = null;
-      let listAreas = [];
-      await userCollection
-        .where('user', '==', user)
-        .get()
-        .then((snapshot) => {
-          return snapshot.forEach((res) => {
-            resultUser = res.id;
-            if (res.data().areas) {
-              listAreas = res.data().areas;
-            }
-          });
-        });
-      if (!resultUser) {
+      const userDoc = await users.findByCpf(user);
+      if (!userDoc) {
         return response
           .status(404)
           .json({ error: 'Não foi encontrado esse usuário' });
       }
+      const listAreas = userDoc.data.areas;
       if (!listAreas) {
         return response.status(404).json({
           error:
             'Não foi encontrado esse as áreas de conhecimento desse usuário',
         });
       }
-      if (listAreas.includes(name))
-        listAreas = listAreas.filter((value) => {
-          return value !== name;
-        });
-      else {
+      if (!listAreas.includes(name)) {
         return response.status(404).json({
           error: 'Não foi encontrado essa área de conhecimento nesse usuário',
         });
       }
-      await userCollection.doc(resultUser).update({
-        areas: Array.from(listAreas),
+      await users.update(userDoc.id, {
+        areas: listAreas.filter((value) => value !== name),
       });
       return response.status(200).send();
     } catch (e) {

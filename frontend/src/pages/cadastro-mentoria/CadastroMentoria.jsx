@@ -21,6 +21,7 @@ import Espaco from './StyledComponents/Espaco';
 import { profile } from '../../services/user';
 
 import { urlFiles } from '../../services/http';
+import { uploadImage } from '../../services/upload';
 
 
 /**
@@ -68,7 +69,7 @@ function CadastroMentoria() {
   };
 
 
-  const handleAddMentoria = (event) => {
+  const handleAddMentoria = async (event) => {
     event.preventDefault();
 
     const token = sessionStorage.getItem('token');
@@ -83,7 +84,12 @@ function CadastroMentoria() {
       }
     });
 
-    data.append('image', image);
+    if (image instanceof File) {
+      data.append('imageKey', await uploadImage(image));
+    } else if (image) {
+      // Edicao sem foto nova: reenvia o nome atual para o backend manter
+      data.append('image', image);
+    }
 
     listDataHours.forEach((element) => {
       data.append('time', element.hour);
@@ -93,14 +99,12 @@ function CadastroMentoria() {
     // || !data.get('mentoringOption')
     if (!data.get('title') || !data.get('description') || !data.get('knowledgeArea') || !data.get('time') || !data.get('dayOfWeek')) {
       enqueue('Preencha todos os campos.');
-    } else if (!data.get('image')) {
+    } else if (!data.get('image') && !data.get('imageKey')) {
       enqueue('Insira uma foto para mentoria');
     } else if (!data.get('mentoringOption')) {
       enqueue('Selecione o tipo de mentoria');
     } else if (oldMentoria) {
-      if (
-        typeof image === 'string' //! !
-      ) data.delete('image');
+      // O nome da imagem atual ja foi enviado em `image` acima
       const headers = { headers: { param: { id: oldMentoria.id }, Authorization: `Bearer ${token}` } };
       atualizarMentoria(headers, data).then((res) => {
         if (res.status === 200) {

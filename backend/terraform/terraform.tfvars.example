@@ -1,0 +1,6 @@
+# Copie para terraform.tfvars (ignorado pelo git) e preencha.
+
+# Connection string do projeto no Neon (Dashboard > Connect). Para a Lambda,
+# prefira o endpoint com "-pooler": cada container abre conexoes proprias e o
+# pooler do Neon aguenta muitas mais que o endpoint direto.
+db_conn_string = "postgresql://usuario:senha@ep-exemplo-123456-pooler.us-east-1.aws.neon.tech/neondb?sslmode=require"

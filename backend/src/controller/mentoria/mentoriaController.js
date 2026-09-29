@@ -1,15 +1,12 @@
 import path from 'path';
 import hbs from 'nodemailer-express-handlebars';
-import admin from '../../configs/database/connection';
-import resizeImage from '../../helper/resizeImageHelper';
-// eslint-disable-next-line no-unused-vars
-import getFirstDate from '../../helper/firstMetoringHelper';
+import { claimImage } from '../../helper/imageStorage';
 // eslint-disable-next-line import/named
-import { getUserCredentials, importUser } from '../user/userController';
+import { importUser } from '../user/userController';
 import transporter from '../../configs/email/email';
 import getNextDateTime from '../../helper/getNextDateTimeHelper';
-
-const db = admin.firestore();
+import * as mentorias from '../../repositories/mentoriaRepository';
+import * as users from '../../repositories/userRepository';
 
 function checkSameHour(days, hours) {
   let check = false;
@@ -28,84 +25,42 @@ function checkSameHour(days, hours) {
 }
 
 async function getMentoringById(id) {
-  const result = (await db.collection('mentoria').doc(id).get()).data();
-  return result;
+  const result = await mentorias.findById(id);
+  return result ? result.data : null;
 }
 
 async function getMentoriaByMentoringId(id) {
   try {
-    const mentoringCollection = db.collection('mentoria');
-    let results = [];
-    await mentoringCollection
-      .where('flagDisable', '==', false)
-      .get()
-      .then((snapshot) => {
-        snapshot.forEach((doc) => {
-          if (doc.id === id) {
-            results = doc.data();
-          }
-        });
-      });
-
-    return results;
+    const m = await mentorias.findById(id);
+    return m && m.data.flagDisable === false ? m.data : [];
   } catch (e) {
     return null;
   }
 }
 
+// todo usuario que pode ser mentor (userType diferente de 2)
 async function getMentores() {
-  const userCollection = db.collection('user');
+  const mentorDocs = await users.listMentors();
 
-  const results = [];
-  await userCollection
-    .where('userType', '<', 2)
-    .get()
-    .then((snapshot) => {
-      return snapshot.forEach((res) => {
-        results.push({
-          cpf: res.data().cpf,
-          name: res.data().name,
-          image: res.data().image,
-          email: res.data().email,
-        });
-      });
-    });
-
-  await userCollection
-    .where('userType', '>', 2)
-    .get()
-    .then((snapshot) => {
-      return snapshot.forEach((res) => {
-        results.push({
-          cpf: res.data().cpf,
-          name: res.data().name,
-          image: res.data().image,
-          email: res.data().email,
-        });
-      });
-    });
-
-  return results;
+  return mentorDocs.map((res) => ({
+    cpf: res.data.cpf,
+    name: res.data.name,
+    image: res.data.image,
+    email: res.data.email,
+  }));
 }
+
 async function getMentorByCPF(cpf) {
-  const userCollection = db.collection('user');
-  const results = [];
+  const res = await users.findByCpf(cpf);
 
-  await userCollection
-    .where('cpf', '==', cpf)
-    .get()
-    .then((snapshot) => {
-      return snapshot.forEach((res) => {
-        results.push({
-          cpf: res.data().cpf,
-          name: res.data().name,
-          image: res.data().image,
-          email: res.data().email,
-        });
-      });
-    });
+  if (!res) return undefined;
 
-  return results[0];
+  return {
+    cpf: res.data.cpf,
+    name: res.data.name,
+    image: res.data.image,
+    email: res.data.email,
+  };
 }
 
 async function triggerEmail(userEmail, datas) {
@@ -163,16 +118,14 @@ module.exports = {
 
       const signalFlag = false;
 
-      const image = await resizeImage(request.file);
+      // claim check: so o ticket chega aqui, a imagem ja esta no bucket
+      const image = await claimImage(request.body.imageKey);
 
       const cpfSession = request.tokenCpf;
-
-      const mentoringCollection = db.collection('mentoria');
 
       // controls the number of weeks to be scheduled
 
       const dates = [];
-      // let k = 0;
       let days = [];
       let hours = [];
 
@@ -192,7 +145,7 @@ module.exports = {
 
       const date = await getNextDateTime(dates, days, hours);
 
-      await mentoringCollection.add({
+      await mentorias.insert({
         image,
         cpf: cpfSession,
         title,
@@ -215,20 +168,11 @@ module.exports = {
 
   async getMentoringBySession(request, response) {
     try {
-      const mentoringCollection = db.collection('mentoria');
-      const results = [];
-      await mentoringCollection
-        .where('cpf', '==', request.tokenCpf)
-        .where('flagDisable', '==', false)
-        .get()
-        .then((snapshot) => {
-          snapshot.forEach((doc) => {
-            results.push({
-              id: doc.id,
-              data: doc.data(),
-            });
-          });
-        });
+      const results = await mentorias.listWhere({
+        cpf: request.tokenCpf,
+        flagDisable: false,
+      });
+
       if (!results.length) {
         return response
           .status(400)
@@ -245,16 +189,17 @@ module.exports = {
   async getMentoring(request, response) {
     try {
       const { id } = request.params;
-      const apiResult = await db.collection('mentoria').doc(id).get();
-      const result = apiResult.data();
-      result.id = id;
-      const mentorInfo = await getMentorByCPF(result.cpf);
-      result.mentorInfos = mentorInfo;
-      if (!result) {
+      const m = await mentorias.findById(id);
+
+      if (!m) {
         return response
           .status(400)
           .json({ error: 'Não foi encontrado essa mentoria' });
       }
+
+      const result = m.data;
+      result.id = id;
+      result.mentorInfos = await getMentorByCPF(result.cpf);
 
       return response.status(200).json(result);
     } catch (e) {
@@ -266,49 +211,34 @@ module.exports = {
 
   async getApproved(request, response) {
     try {
-      const mentoringCollection = db.collection('mentoria');
-
-      let i = 0;
       const mentorInfos = await getMentores();
-      let userFound = false;
 
-      const results = [];
-      await mentoringCollection
-        .where('flagDisable', '==', false)
-        .where('isVisible', '==', true)
-        .where('mentoringApproved', '==', true)
-        .get()
-        .then((snapshot) => {
-          snapshot.forEach((doc) => {
-            for (i = 0; i < mentorInfos.length; i += 1) {
-              if (mentorInfos[i].cpf === doc.data().cpf) {
-                userFound = true;
-                break;
-              }
-            }
+      const mentoringDocs = await mentorias.listWhere({
+        flagDisable: false,
+        isVisible: true,
+        mentoringApproved: true,
+      });
 
-            if (!userFound) {
-              mentorInfos[i].name = 'Usuário não encontrado';
-              mentorInfos[i].image = '';
-            }
+      const results = mentoringDocs.map((doc) => {
+        const mentorInfo = mentorInfos.find(
+          (mentor) => mentor.cpf === doc.data.cpf
+        );
 
-            results.push({
-              idMentoria: doc.id,
-              cpf: doc.data().cpf,
-              title: doc.data().title,
-              flagDisable: doc.data().flagDisable,
-              description: doc.data().description,
-              mentoringOption: doc.data().mentoringOption,
-              dateTime: doc.data().dateTime,
-              knowledgeArea: doc.data().knowledgeArea,
-              image: doc.data().image,
-              mentorInfos: {
-                image: mentorInfos[i].image,
-                name: mentorInfos[i].name,
-              },
-            });
-          });
-        });
+        return {
+          idMentoria: doc.id,
+          cpf: doc.data.cpf,
+          title: doc.data.title,
+          flagDisable: doc.data.flagDisable,
+          description: doc.data.description,
+          mentoringOption: doc.data.mentoringOption,
+          dateTime: doc.data.dateTime,
+          knowledgeArea: doc.data.knowledgeArea,
+          image: doc.data.image,
+          mentorInfos: mentorInfo
+            ? { image: mentorInfo.image, name: mentorInfo.name }
+            : {},
+        };
+      });
 
       if (!results.length) {
         return response
@@ -326,42 +256,37 @@ module.exports = {
 
   async getPending(request, response) {
     try {
-      const userType = await getUserCredentials(request.tokenCpf);
-      if (userType !== 0) {
+      // mesmo criterio do getAll de usuarios: o userType assinado no token.
+      // Buscar pelo cpf falhava para admin sem cpf (criado por create-admin).
+      if (parseInt(request.tokenUserType, 10) !== 0) {
         return response.status(401).send('Unauthorized');
       }
 
-      let i = 0;
       const mentorInfos = await getMentores();
 
-      const mentoringCollection = db.collection('mentoria');
-      const results = [];
-      await mentoringCollection
-        .where('flagDisable', '==', false)
-        .where('mentoringApproved', '==', false)
-        .get()
-        .then((snapshot) => {
-          snapshot.forEach((doc) => {
-            const mentorInfo = {
-              name: 'Não encontrado',
-              image: '',
-              email: '',
-            };
-            for (i = 0; i < mentorInfos.length; i += 1) {
-              if (mentorInfos[i].cpf === doc.data().cpf) {
-                mentorInfo.name = mentorInfos[i].name;
-                mentorInfo.image = mentorInfos[i].image;
-                mentorInfo.email = mentorInfos[i].email;
-                break;
-              }
-            }
-            results.push({
-              id: doc.id,
-              data: doc.data(),
-              mentorInfo,
-            });
-          });
-        });
+      const mentoringDocs = await mentorias.listWhere({
+        flagDisable: false,
+        mentoringApproved: false,
+      });
+
+      const results = mentoringDocs.map((doc) => {
+        const mentorInfo = {
+          name: 'Não encontrado',
+          image: '',
+          email: '',
+        };
+        const found = mentorInfos.find((mentor) => mentor.cpf === doc.data.cpf);
+        if (found) {
+          mentorInfo.name = found.name;
+          mentorInfo.image = found.image;
+          mentorInfo.email = found.email;
+        }
+        return {
+          id: doc.id,
+          data: doc.data,
+          mentorInfo,
+        };
+      });
       return response.status(200).json(results);
     } catch (e) {
       return response.status(500).json({
@@ -374,7 +299,6 @@ module.exports = {
     try {
       const allDatas = request.body;
       const { id } = request.params;
-      const mentoringCollection = db.collection('mentoria');
       const mentoring = await getMentoringById(id);
 
       if (!mentoring) {
@@ -388,35 +312,39 @@ module.exports = {
           delete allDatas[el];
       });
 
-      if (request.file !== undefined) {
-        const image = await resizeImage(request.file);
-        allDatas.image = image !== allDatas.image ? image : allDatas.image;
+      if (allDatas.imageKey) {
+        allDatas.image = await claimImage(allDatas.imageKey);
       } else if (!allDatas.image) {
         delete allDatas.image;
       }
+      delete allDatas.imageKey;
 
-      const { dayOfWeek } = allDatas;
-      const { time } = allDatas;
+      const { dayOfWeek, time } = allDatas;
 
-      const dates = [];
-      let days = [];
-      let hours = [];
+      // so recalcula as datas quando o body traz os horarios; sem eles o
+      // codigo antigo gravava dateTime a partir de [undefined]
+      if (dayOfWeek !== undefined && time !== undefined) {
+        const dates = [];
+        let days = [];
+        let hours = [];
 
-      if (!Array.isArray(dayOfWeek)) {
-        days.push(dayOfWeek);
-        hours.push(time);
-      } else {
-        if (checkSameHour(dayOfWeek, time)) {
-          return response
-            .status(400)
-            .json({ error: 'Foram selecionado dias e horários iguais!' });
+        if (!Array.isArray(dayOfWeek)) {
+          days.push(dayOfWeek);
+          hours.push(time);
+        } else {
+          if (checkSameHour(dayOfWeek, time)) {
+            return response
+              .status(400)
+              .json({ error: 'Foram selecionado dias e horários iguais!' });
+          }
+          days = dayOfWeek;
+          hours = time;
         }
-        days = dayOfWeek;
-        hours = time;
+
+        allDatas.dateTime = await getNextDateTime(dates, days, hours);
       }
 
-      allDatas.dateTime = await getNextDateTime(dates, days, hours);
-      await mentoringCollection.doc(id).update(allDatas);
+      await mentorias.update(id, allDatas);
 
       return response.status(200).send({
         success: true,
@@ -435,24 +363,16 @@ module.exports = {
     try {
       const { title, approved, mentorEmail } = request.body;
       const { id } = request.params;
-      let res = null;
 
       const flagDisable = !approved;
 
-      const mentoringCollection = db.collection('mentoria');
-
-      await mentoringCollection.doc(id).update({
+      await mentorias.update(id, {
         title,
         mentoringApproved: approved,
         flagDisable,
       });
 
-      await mentoringCollection
-        .doc(id)
-        .get()
-        .then((doc) => {
-          res = doc.data();
-        });
+      const res = await getMentoringById(id);
 
       if (flagDisable) {
         const email = {
@@ -483,7 +403,6 @@ module.exports = {
   async deactivateMentoring(request, response) {
     try {
       const { id } = request.params;
-      const mentoringCollection = db.collection('mentoria');
       const mentoring = await getMentoringById(id);
       if (!mentoring) {
         return response
@@ -491,11 +410,7 @@ module.exports = {
           .send({ error: 'A mentoria não foi encontrada' });
       }
 
-      const flag = {
-        flagDisable: true,
-      };
-
-      await mentoringCollection.doc(id).update(flag);
+      await mentorias.update(id, { flagDisable: true });
 
       return response
         .status(200)
@@ -509,9 +424,8 @@ module.exports = {
 
   async changeVisibility(request, response) {
     try {
-      const mentoringCollection = db.collection('mentoria');
       const { id } = request.query;
-      const mentoring = (await mentoringCollection.doc(id).get()).data();
+      const mentoring = await getMentoringById(id);
       if (!mentoring)
         return response.status(404).json({
           error: `Mentoria não encontrada.`,
@@ -521,9 +435,7 @@ module.exports = {
         mentoring.isVisible = !mentoring.isVisible;
       else mentoring.isVisible = false;
 
-      await mentoringCollection
-        .doc(id)
-        .update({ isVisible: mentoring.isVisible });
+      await mentorias.update(id, { isVisible: mentoring.isVisible });
       let finalMessage = 'Mentoria esta invisível';
       if (mentoring.isVisible) finalMessage = 'Mentoria esta visível';
       return response.status(200).send({ success: true, msg: finalMessage });
@@ -541,9 +453,16 @@ module.exports = {
       let isAvailable = false;
       const mentoradoId = request.tokenCpf;
       const { id } = request.params;
-      const mentoringCollection = db.collection('mentoria');
 
       const mentoring = await getMentoriaByMentoringId(id);
+
+      // mentoria inexistente ou desativada: indisponivel, e nao erro 500
+      if (!mentoring || !Array.isArray(mentoring.dateTime)) {
+        return response.status(400).send({
+          success: false,
+          msg: 'Mentoria indisponível',
+        });
+      }
 
       for (let x = 0; x < mentoring.dateTime.length; x += 1) {
         if (
@@ -562,7 +481,7 @@ module.exports = {
       }
 
       if (isAvailable) {
-        await mentoringCollection.doc(id).update(mentoring);
+        await mentorias.update(id, mentoring);
         const mentor = (await importUser(mentoring.cpf)).data;
         const mentorando = (await importUser(mentoradoId)).data;
         const hora = hour.substring(0, 5);

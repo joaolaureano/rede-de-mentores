@@ -1,9 +1,7 @@
 import jwt from 'jsonwebtoken';
-import bcrypt from 'bcrypt';
-import admin from '../../configs/database/connection';
+import bcrypt from 'bcryptjs';
+import * as users from '../../repositories/userRepository';
 import jwtAuth from '../../configs/jwt/auth';
-
-const db = admin.firestore();
 
 module.exports = {
   async login(request, response) {
@@ -15,18 +13,13 @@ module.exports = {
           .status(404)
           .json({ error: 'Não foram enviados os dados.' });
       }
-      const userCollection = db.collection('user');
       let result = null;
       let id = null;
-      await userCollection
-        .where('email', '==', email)
-        .get()
-        .then((snapshot) => {
-          return snapshot.forEach((res) => {
-            result = res.data();
-            id = res.id;
-          });
-        });
+      const user = await users.findByEmail(email);
+      if (user) {
+        result = user.data;
+        id = user.id;
+      }
 
       if (!result) {
         return response.status(401).json({ error: 'Usuário inválido!' });
@@ -34,6 +27,10 @@ module.exports = {
       if (!(await bcrypt.compare(password, result.password))) {
         return response.status(401).json({ error: 'Senha incorreta' });
       }
+
+      // o hash da senha nao sai do servidor
+      result = { ...result };
+      delete result.password;
 
       return response.status(200).json({
         result,

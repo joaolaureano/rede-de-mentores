@@ -1,11 +1,9 @@
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import * as yup from 'yup';
-import admin from '../../configs/database/connection';
-import resizeImage from '../../helper/resizeImageHelper';
+import { claimImage } from '../../helper/imageStorage';
 import jwtAuth from '../../configs/jwt/auth';
 import transporter from '../../configs/email/email';
-
-const db = admin.firestore();
+import * as users from '../../repositories/userRepository';
 
 const userType = {
   ADMIN: 0,
@@ -15,19 +13,7 @@ const userType = {
 };
 
 async function getUser(email) {
-  const userCollection = db.collection('user');
-  let user = null;
-  await userCollection
-    .where('email', '==', email)
-    .get()
-    .then((snapshot) => {
-      return snapshot.forEach((res) => {
-        user = {
-          id: res.id,
-          data: res.data(),
-        };
-      });
-    });
+  const user = await users.findByEmail(email);
   if (!user) {
     return null;
   }
@@ -39,16 +25,18 @@ async function getUser(email) {
 // Adds menthor data to an existing user of type mentee
 async function addMenthorData(newData, response) {
   try {
-    const { linkedin, areas, userId, userCollection } = newData;
+    const { linkedin, areas, userId } = newData;
+
+    const partial = { userType: userType.BOTH };
 
     if (linkedin) {
-      await userCollection.doc(userId).update({ linkedin });
+      partial.linkedin = linkedin;
     }
     if (areas) {
-      await userCollection.doc(userId).update({ areas });
+      partial.areas = areas;
     }
-    const currentUserType = userType.BOTH;
-    await userCollection.doc(userId).update({ userType: currentUserType });
+
+    await users.update(userId, partial);
 
     return response
       .status(200)
@@ -65,11 +53,10 @@ async function newMenthor(request, response) {
   try {
     const { cpf, email, password, name, linkedin, phone, areas } = request.body;
 
-    const image = await resizeImage(request.file);
+    // claim check: so o ticket chega aqui, a imagem ja esta no bucket
+    const image = await claimImage(request.body.imageKey);
 
     const passwordHash = await bcrypt.hash(password, 8);
-
-    const userCollection = db.collection('user');
 
     const user = await getUser(email);
 
@@ -92,7 +79,6 @@ async function newMenthor(request, response) {
         linkedin,
         areas,
         userId: user.id,
-        userCollection,
       };
 
       // User exists but it's type is different
@@ -101,7 +87,7 @@ async function newMenthor(request, response) {
 
     const currentUserType = userType.MENTHOR;
 
-    await userCollection.add({
+    await users.insert({
       password: passwordHash,
       name,
       cpf,
@@ -124,17 +110,18 @@ async function newMenthor(request, response) {
 // Adds mentee data to an existing user of type menthor
 async function addMenteeData(newData, response) {
   try {
-    const { birthDate, registration, userId, userCollection } = newData;
+    const { birthDate, registration, userId } = newData;
+
+    const partial = { userType: userType.BOTH };
 
     if (birthDate) {
-      await userCollection.doc(userId).update({ birthDate });
+      partial.birthDate = birthDate;
     }
     if (registration) {
-      await userCollection.doc(userId).update({ registration });
+      partial.registration = registration;
     }
 
-    const currentUserType = userType.BOTH;
-    await userCollection.doc(userId).update({ userType: currentUserType });
+    await users.update(userId, partial);
 
     return response
       .status(200)
@@ -159,11 +146,10 @@ async function newtMentee(request, response) {
       password,
     } = request.body;
 
-    const image = await resizeImage(request.file);
+    // claim check: so o ticket chega aqui, a imagem ja esta no bucket
+    const image = await claimImage(request.body.imageKey);
 
     const passwordHash = await bcrypt.hash(password, 8);
-
-    const userCollection = db.collection('user');
 
     const user = await getUser(email);
 
@@ -181,7 +167,6 @@ async function newtMentee(request, response) {
         birthDate,
         registration,
         userId: user.id,
-        userCollection,
       };
 
       // User exists but it's type is different
@@ -190,7 +175,7 @@ async function newtMentee(request, response) {
 
     const currentUserType = userType.MENTEE;
 
-    await userCollection.add({
+    await users.insert({
       name,
       birthDate,
       cpf,
@@ -229,18 +214,11 @@ module.exports = {
   async getAll(request, response) {
     try {
       if (parseInt(request.tokenUserType, 10) === userType.ADMIN) {
-        const allUsers = [];
-        await db
-          .collection('user')
-          .get()
-          .then((snapshot) => {
-            return snapshot.forEach((res) => {
-              allUsers.push({
-                id: res.id,
-                data: res.data(),
-              });
-            });
-          });
+        const allUsers = await users.list();
+        // o hash da senha nao sai do servidor
+        allUsers.forEach((user) => {
+          delete user.data.password;
+        });
         return response.status(200).json(allUsers);
       }
       return response.status(405).json({
@@ -290,35 +268,45 @@ module.exports = {
             .send({ error: 'E-mail fora do formato.' });
         }
       }
-      if (request.file !== undefined) {
-        const image = await resizeImage(request.file);
-        allDatas.image = image !== allDatas.image ? image : allDatas.image;
+      if (allDatas.imageKey) {
+        allDatas.image = await claimImage(allDatas.imageKey);
+      }
+      delete allDatas.imageKey;
+
+      // senha so muda se vier preenchida, e sempre com hash (o formulario de
+      // edicao manda o campo vazio quando o usuario nao a altera)
+      if (typeof allDatas.password === 'string' && allDatas.password.length > 0) {
+        allDatas.password = await bcrypt.hash(allDatas.password, 8);
+      } else {
+        delete allDatas.password;
       }
 
-      if (allDatas.userType)
-        allDatas.userType = parseInt(allDatas.userType, 10);
+      // userType 0 e administrador: nao pode ser atribuido pelo proprio usuario
+      if (allDatas.userType !== undefined) {
+        const parsedUserType = parseInt(allDatas.userType, 10);
+        if (
+          parsedUserType === userType.MENTHOR ||
+          parsedUserType === userType.MENTEE ||
+          parsedUserType === userType.BOTH
+        ) {
+          allDatas.userType = parsedUserType;
+        } else {
+          delete allDatas.userType;
+        }
+      }
 
-      const userCollection = db.collection('user');
-      const user = userCollection.doc(idToken);
+      const user = await users.findById(idToken);
 
       if (!user) {
         return response.status(400).send({ error: 'Usuário não existe.' });
       }
 
-      await userCollection.doc(user.id).update(allDatas);
+      await users.update(user.id, allDatas);
 
       return response.status(200).json({
-        token:
-          ({
-            cpf: allDatas.cpf,
-            email: allDatas.email,
-            id: user.id,
-            userType: user.userType,
-          },
-          jwtAuth.secret,
-          {
-            expiresIn: jwtAuth.expiresIn,
-          }),
+        token: {
+          expiresIn: jwtAuth.expiresIn,
+        },
       });
     } catch (e) {
       return response.status(500).json({
@@ -339,37 +327,23 @@ module.exports = {
         password,
       } = request.body;
 
-      const image = await resizeImage(request.file);
-
-      const userCollection = db.collection('user');
+      const image = await claimImage(request.body.imageKey);
 
       const user = await getUser(email);
       if (!user) {
         return response.status(400).send({ error: 'Usuário não existe' });
       }
 
-      if (name) {
-        await userCollection.doc(user.id).update({ name });
-      }
-      if (birthDate) {
-        await userCollection.doc(user.id).update({ birthDate });
-      }
-      if (cpf) {
-        await userCollection.doc(user.id).update({ cpf });
-      }
-      if (phone) {
-        await userCollection.doc(user.id).update({ phone });
-      }
-      if (registration) {
-        await userCollection.doc(user.id).update({ registration });
-      }
-      if (password) {
-        const passwordHash = await bcrypt.hash(password, 8);
-        await userCollection.doc(user.id).update({ password: passwordHash });
-      }
-      if (image) {
-        await userCollection.doc(user.id).update({ image });
-      }
+      const partial = {};
+      if (name) partial.name = name;
+      if (birthDate) partial.birthDate = birthDate;
+      if (cpf) partial.cpf = cpf;
+      if (phone) partial.phone = phone;
+      if (registration) partial.registration = registration;
+      if (password) partial.password = await bcrypt.hash(password, 8);
+      if (image) partial.image = image;
+
+      await users.update(user.id, partial);
 
       return response
         .status(200)
@@ -391,13 +365,12 @@ module.exports = {
           .send({ error: 'Variável email dever ser passada ' });
       }
 
-      const userCollection = db.collection('user');
       const user = await getUser(email);
       if (!user) {
         return response.status(400).send({ error: 'Usuário não existe.' });
       }
 
-      await userCollection.doc(user.id).delete();
+      await users.remove(user.id);
       return response
         .status(200)
         .send({ success: true, msg: `${email} removido com sucesso!` });
@@ -409,37 +382,15 @@ module.exports = {
   },
 
   async importUser(cpf) {
-    const userCollection = db.collection('user');
-    let user = null;
-    await userCollection
-      .where('cpf', '==', cpf)
-      .get()
-      .then((snapshot) => {
-        return snapshot.forEach((res) => {
-          user = {
-            id: res.id,
-            data: res.data(),
-          };
-        });
-      });
-    if (!user) {
-      return null;
-    }
-    return user;
+    return users.findByCpf(cpf);
   },
 
   async getUserCredentials(userID) {
-    const userCollection = db.collection('user');
-    const results = [];
-    await userCollection
-      .where('cpf', '==', userID)
-      .get()
-      .then((snapshot) => {
-        snapshot.forEach((doc) => {
-          results.push(doc.data().userType);
-        });
-      });
-    return results[0];
+    const user = await users.findByCpf(userID);
+    if (!user) {
+      return undefined;
+    }
+    return user.data.userType;
   },
 
   // eslint-disable-next-line consistent-return
@@ -457,15 +408,13 @@ module.exports = {
           .send(`não foi encontrado um usuário com o email ${email}`);
       }
 
-      const userCollection = db.collection('user');
-
       const passwordRequirementExpiration = new Date();
 
       passwordRequirementExpiration.setDate(
         passwordRequirementExpiration.getDate() + 1
       );
 
-      await userCollection.doc(user.id).update({
+      await users.update(user.id, {
         passwordRequirementExpiration,
       });
 
@@ -493,37 +442,25 @@ module.exports = {
     try {
       const { id, newPassword } = request.body;
 
-      const passwordHash = await bcrypt.hash(newPassword, 8);
+      const user = await users.findById(id);
 
-      const userCollection = db.collection('user');
-
-      const currentDate = new Date();
-
-      const validDate = await userCollection
-        .doc(id)
-        .get()
-        .then((doc) => {
-          if (doc.data().passwordRequirementExpiration) {
-            const dbDate = doc.data().passwordRequirementExpiration.toDate();
-            if (dbDate > currentDate) {
-              return true;
-            }
-          }
-          response.status(401).send({
-            message: 'Solicitação de troca de senha inválida',
-          });
-          return false;
-        })
-        .catch((error) => {
-          return response
-            .status(404)
-            .send({ message: `usuário não encontrado: ${error}` });
-        });
-      if (!validDate) {
-        return response;
+      if (!user) {
+        return response
+          .status(404)
+          .send({ message: 'usuário não encontrado' });
       }
 
-      await userCollection.doc(id).update({
+      const expiration = user.data.passwordRequirementExpiration;
+
+      if (!expiration || new Date(expiration) <= new Date()) {
+        return response.status(401).send({
+          message: 'Solicitação de troca de senha inválida',
+        });
+      }
+
+      const passwordHash = await bcrypt.hash(newPassword, 8);
+
+      await users.update(id, {
         password: passwordHash,
         passwordRequirementExpiration: null,
       });

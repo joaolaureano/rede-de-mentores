@@ -1,4 +1,4 @@
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 
 export default class User {
   constructor(user, cpf, mentorFlag, email, password, name, linkedin, phone) {

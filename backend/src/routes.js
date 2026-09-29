@@ -4,11 +4,24 @@ import userController from './controller/user/userController';
 import knowledgeAreasController from './controller/knowledgeAreas/knowledgeAreasController';
 import sessionController from './controller/session/sessionController';
 import mentoriaController from './controller/mentoria/mentoriaController';
+import uploadController from './controller/upload/uploadController';
 
 import authMiddleware from './middlewares/auth';
 import upload from './configs/multer/multer';
 
 const routes = new Router();
+
+/*
+    Routes de upload (claim check)
+    A imagem vai DIRETO para o bucket com um ticket assinado; a API so recebe a
+    chave (imageKey). Por isso os formularios usam upload.none(): mandar arquivo
+    no corpo da API agora e erro.
+ */
+routes.post('/uploads', uploadController.createTicket);
+// Sem bucket (desenvolvimento) o front manda o arquivo para a propria API
+if (!process.env.FILES_BUCKET) {
+  routes.post('/uploads/local', upload.single('file'), uploadController.receiveLocal);
+}
 
 /*
    Routes of autoconhecimento
@@ -50,12 +63,12 @@ routes.post(
 routes.get('/users', authMiddleware, userController.get);
 routes.get('/allUsers', authMiddleware, userController.getAll);
 
-routes.post('/users', upload.single('image'), userController.insert);
+routes.post('/users', upload.none(), userController.insert);
 routes.post('/passwordRecuperationLink', userController.sendVerificationEmail);
 routes.post('/setPassword/', userController.updatePassword);
 routes.put(
   '/users',
-  upload.single('image'),
+  upload.none(),
   authMiddleware,
   userController.update
 );
@@ -71,7 +84,7 @@ Routes from mentoria
 */
 routes.post(
   '/cadastroMentoria',
-  upload.single('image'),
+  upload.none(),
   authMiddleware,
   mentoriaController.insert
 );
@@ -92,7 +105,7 @@ routes.get('/pendingMentorings', authMiddleware, mentoriaController.getPending);
 
 routes.put(
   '/mentoria/alter/:id',
-  upload.single('image'),
+  upload.none(),
   authMiddleware,
   mentoriaController.updateMentoring
 );

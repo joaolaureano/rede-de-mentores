@@ -15,6 +15,7 @@ import {
   formatMatricula,
 } from '../../utils/maskUtils';
 import { urlFiles } from '../../services/http';
+import { uploadImage } from '../../services/upload';
 import pushIfNecessary from '../../utils/HTMLUtils';
 import { userTypes } from '../../utils/userType.constants';
 import validateEmail from '../../utils/validationUtils';
@@ -97,13 +98,17 @@ function CadastroMentorado() {
     // eslint-disable-next-line
   }, []);
 
-  const attemptRegister = (event) => {
+  const attemptRegister = async (event) => {
     setSent(true);
     event.preventDefault();
     if (disableButton(true)) return;
 
     const data = new FormData();
-    data.append('image', imagem);
+    if (imagem instanceof File) {
+      data.append('imageKey', await uploadImage(imagem));
+    } else {
+      data.append('image', imagem);
+    }
     data.append('name', nome);
     data.append('email', email);
     data.append('birthDate', dataNascimento);
@@ -123,7 +128,7 @@ function CadastroMentorado() {
       || !confirmarSenha
     ) {
       enqueue('Preencha todos os campos.');
-    } else if (!data.get('image')) {
+    } else if (!data.get('image') && !data.get('imageKey')) {
       enqueue('Insira uma foto de perfil.');
     } else if (!validateEmail(data.get('email'))) {
       enqueue('Fomato incorreto de e-mail.');
@@ -153,13 +158,18 @@ function CadastroMentorado() {
     }
   };
 
-  const handleEdit = () => {
+  const handleEdit = async () => {
     setLoading(true);
     const oldProfile = JSON.parse(sessionStorage.getItem('oldProfile'));
     const tkn = sessionStorage.getItem('token');
     const headers = { headers: { Authorization: `Bearer ${tkn}` } };
     const data = new FormData();
-    data.append('image', imagem || oldProfile.image);
+    // Sem foto nova: reenvia o nome atual para o backend manter a imagem
+    if (imagem instanceof File) {
+      data.append('imageKey', await uploadImage(imagem));
+    } else {
+      data.append('image', oldProfile.image);
+    }
     data.append('name', nome);
     data.append('email', email);
     data.append('birthDate', dataNascimento);

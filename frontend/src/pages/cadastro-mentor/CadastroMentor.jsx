@@ -11,6 +11,7 @@ import RedeHorizontalSeparator from '../../components/RedeHorizontalSeparator/Re
 import RedeSelect from '../../components/RedeSelect/RedeSelect';
 import RedeCheckbox from '../../components/RedeCheckbox/RedeCheckbox';
 import { urlFiles } from '../../services/http';
+import { uploadImage } from '../../services/upload';
 import { availableAreas as getAvailableAreas } from '../../services/areas';
 import pushIfNecessary from '../../utils/HTMLUtils';
 import { userTypes } from '../../utils/userType.constants';
@@ -104,13 +105,17 @@ function CadastroMentor() {
     // eslint-disable-next-line
   }, []);
 
-  const attemptRegister = (event) => {
+  const attemptRegister = async (event) => {
     setSent(true);
     event.preventDefault();
     if (disableButton(true)) return;
 
     const data = new FormData();
-    data.append('image', image);
+    if (image instanceof File) {
+      data.append('imageKey', await uploadImage(image));
+    } else {
+      data.append('image', image);
+    }
     data.append('name', name);
     data.append('email', email);
     data.append('phone', phone);
@@ -131,7 +136,7 @@ function CadastroMentor() {
       || !confirmPassword
     ) {
       enqueue('Preencha todos os campos.');
-    } else if (!data.get('image')) {
+    } else if (!data.get('image') && !data.get('imageKey')) {
       enqueue('Insira uma foto de perfil.');
     } else if (
       data.get('password')
@@ -161,13 +166,18 @@ function CadastroMentor() {
     }
   };
 
-  const attemptEdit = () => {
+  const attemptEdit = async () => {
     setLoading(true);
     const oldProfile = JSON.parse(sessionStorage.getItem('oldProfile'));
     const tkn = sessionStorage.getItem('token');
     const headers = { headers: { Authorization: `Bearer ${tkn}` } };
     const data = new FormData();
-    data.append('image', image || oldProfile.image);
+    // Sem foto nova: reenvia o nome atual para o backend manter a imagem
+    if (image instanceof File) {
+      data.append('imageKey', await uploadImage(image));
+    } else {
+      data.append('image', oldProfile.image);
+    }
     data.append('name', name);
     data.append('email', email);
     data.append('phone', phone);

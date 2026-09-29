@@ -1,7 +1,30 @@
 node_modules/
 .env
+.env.*
+!.env.example
 .DS_Store
-build/
-storybook-static/
+
+# backend
+backend/dist-lambda/
+# fotos enviadas por usuarios (ambiente local e o legado do Firestore): dado pessoal
 backend/assets/userImages/*
+
+# terraform / tofu
+**/.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+**/.build/
+
+# frontend
+frontend/build/
+frontend/storybook-static/
+# plano do tofu: carrega a connection string do banco em texto
+tfplan
+*.tfplan
+backend/assets/uploads/
 !backend/assets/userImages/.gitkeep
+
+# ferramentas locais
+graphify-out/
+.serena/
