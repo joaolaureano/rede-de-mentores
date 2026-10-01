@@ -1,5 +1,7 @@
 # Rede de Mentores
 
+**[Read this in English / Leia em inglês](README.en.md)**
+
 Projeto acadêmico desenvolvido na **AGES** (Agência Experimental de Engenharia
 de Software) da **PUCRS**, no semestre 2020/1, e revisitado depois como projeto
 de portfólio.
