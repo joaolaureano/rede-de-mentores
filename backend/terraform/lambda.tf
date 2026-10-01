@@ -86,8 +86,9 @@ resource "aws_lambda_function" "api" {
       NODE_ENV     = "production"
       FILES_BUCKET = aws_s3_bucket.files.id
       EXPIRES_IN   = var.jwt_expires_in
-      # sem SMTP na nuvem: as rotas respondem como antes, sem enviar
-      EMAIL_ENABLED = "false"
+      # Gmail SMTP quando email_account esta preenchido; senao as rotas
+      # respondem como antes, sem enviar
+      EMAIL_ENABLED = tostring(local.email_enabled)
       # os segredos sao lidos do SSM uma vez por container: mudar a versao
       # altera a configuracao da funcao e descarta os containers com o valor velho
       SECRETS_VERSION = tostring(var.secrets_version)

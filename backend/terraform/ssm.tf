@@ -17,11 +17,21 @@ resource "random_password" "jwt_key" {
 }
 
 locals {
-  secrets = {
-    DB_URL        = var.db_conn_string
-    JWT_KEY       = random_password.jwt_key.result
-    ORIGIN_SECRET = random_password.origin_secret.result
-  }
+  # a condicao olha so a conta (nao sensivel): for_each nao aceita chaves
+  # derivadas de valor sensivel
+  email_enabled = var.email_account != ""
+
+  secrets = merge(
+    {
+      DB_URL        = var.db_conn_string
+      JWT_KEY       = random_password.jwt_key.result
+      ORIGIN_SECRET = random_password.origin_secret.result
+    },
+    local.email_enabled ? {
+      EMAIL_ACCOUNT  = var.email_account
+      EMAIL_PASSWORD = var.email_password
+    } : {}
+  )
 
   ssm_prefix = "/${var.project_name}"
 }
@@ -42,9 +52,20 @@ resource "aws_ssm_parameter" "secret" {
 # Sem statement de kms:Decrypt: SecureString sem chave propria usa a aws/ssm,
 # cuja key policy (gerenciada pela AWS) ja libera decrypt via SSM para qualquer
 # principal da conta. O que controla o acesso e o ssm:GetParameters abaixo.
+# Por prefixo, e nao parametro a parametro: o ROOT_URL abaixo depende do
+# CloudFront, que depende da Lambda, que depende desta policy - listar os ARNs
+# fecharia um ciclo. O prefixo e exclusivo do projeto.
 data "aws_iam_policy_document" "read_secrets" {
   statement {
     actions   = ["ssm:GetParameter", "ssm:GetParameters"]
-    resources = [for p in aws_ssm_parameter.secret : p.arn]
+    resources = ["arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${local.ssm_prefix}/*"]
   }
+}
+
+# Dominio do site, usado no link do e-mail de recuperacao de senha. Nao e
+# segredo; esta no SSM so para a Lambda ler sem depender do CloudFront.
+resource "aws_ssm_parameter" "root_url" {
+  name  = "${local.ssm_prefix}/ROOT_URL"
+  type  = "String"
+  value = aws_cloudfront_distribution.app.domain_name
 }

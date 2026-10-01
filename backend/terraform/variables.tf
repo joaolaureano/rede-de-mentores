@@ -55,3 +55,19 @@ variable "secrets_version" {
   type        = number
   default     = 2
 }
+
+# E-mail (recuperacao de senha e avisos de mentoria) pelo SMTP do Gmail, com
+# senha de app (exige verificacao em 2 etapas na conta Google). Vazio deixa o
+# envio desligado: as rotas respondem sem enviar.
+variable "email_account" {
+  description = "Conta Gmail remetente (ex.: projeto@gmail.com). Vazio desliga o envio."
+  type        = string
+  default     = ""
+}
+
+variable "email_password" {
+  description = "Senha de app da conta Gmail (myaccount.google.com/apppasswords), sem espacos."
+  type        = string
+  default     = ""
+  sensitive   = true
+}

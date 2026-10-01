@@ -84,7 +84,9 @@ async function triggerEmail(userEmail, datas) {
     attachments: [
       {
         filename: 'logo_cabecalho.png',
-        path: path.resolve(__dirname, '../../configs/email/logo_cabecalho.png'),
+        // relativo ao diretorio de execucao, como as views acima: dentro do
+        // bundle da Lambda o __dirname nao aponta mais para src/
+        path: path.resolve('./src/configs/email/logo_cabecalho.png'),
         cid: 'logo',
       },
     ],

@@ -6,6 +6,11 @@ import { GetParametersCommand, SSMClient } from '@aws-sdk/client-ssm';
 // captura JWT_KEY no import. O app entra por require, depois que o SSM respondeu.
 
 const SECRETS = ['DB_URL', 'JWT_KEY', 'ORIGIN_SECRET'];
+// Opcionais: credenciais do Gmail (so existem com o e-mail ligado) e a URL do
+// site, usada no link de recuperacao de senha. A ROOT_URL fica no SSM, e nao
+// no ambiente, porque o CloudFront depende desta funcao: o Terraform nao
+// consegue passar o dominio dele para ca sem criar um ciclo.
+const OPTIONAL = ['EMAIL_ACCOUNT', 'EMAIL_PASSWORD', 'ROOT_URL'];
 
 // Os segredos vem do Parameter Store, e nao de variavel de ambiente: variavel
 // de ambiente e legivel para quem consiga descrever a funcao.
@@ -15,7 +20,7 @@ const loadSecrets = async () => {
 
   const { Parameters = [] } = await new SSMClient({}).send(
     new GetParametersCommand({
-      Names: SECRETS.map((name) => `${prefix}/${name}`),
+      Names: [...SECRETS, ...OPTIONAL].map((name) => `${prefix}/${name}`),
       WithDecryption: true,
     })
   );
@@ -26,6 +31,10 @@ const loadSecrets = async () => {
     // falhar no cold start e melhor que descobrir no primeiro login
     if (!value) throw new Error(`${prefix}/${name} vazio ou ilegivel`);
     process.env[name] = value;
+  });
+  OPTIONAL.forEach((name) => {
+    const value = byName.get(`${prefix}/${name}`);
+    if (value) process.env[name] = value;
   });
 };
 

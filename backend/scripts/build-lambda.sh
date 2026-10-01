@@ -43,6 +43,11 @@ EOF
 (cd "$PKG" && npm install --omit=dev --no-audit --no-fund --no-package-lock \
   --os=linux --cpu=arm64 --libc=glibc >/dev/null)
 
+# templates e logo dos e-mails: o controller os le relativos ao diretorio de
+# execucao (./src/configs/email), que na Lambda e a raiz do pacote
+mkdir -p "$PKG/src/configs/email"
+cp -R src/configs/email/views src/configs/email/logo_cabecalho.png "$PKG/src/configs/email/"
+
 (cd "$PKG" && zip -qr "$OUT/lambda.zip" .)
 rm -rf "$TMP"
 
