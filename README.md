@@ -1,55 +1,57 @@
 # Rede de Mentores
 
-**[Read this in English / Leia em inglês](README.en.md)**
+**[Leia em português / Read this in Portuguese](README.md)**
 
-Projeto acadêmico desenvolvido na **AGES** (Agência Experimental de Engenharia
-de Software) da **PUCRS**, no semestre 2020/1, e revisitado depois como projeto
-de portfólio.
+Academic project built at **AGES** (Agência Experimental de Engenharia de
+Software, PUCRS's experimental software engineering agency) in the 2020/1
+semester, and revisited later as a portfolio project.
 
-A versão original está preservada na branch/tag `v1`. Wiki do projeto original:
+The original version is preserved in the `v1` branch/tag. Wiki of the original
+project:
 https://tools.ages.pucrs.br/rede-de-mentores/wiki/-/wikis/home
 
-## O que é
+## What it is
 
-Uma plataforma que conecta **mentores** e **alunos** (mentorados).
+A platform that connects **mentors** and **students** (mentees).
 
-- Mentores se cadastram, informam suas áreas e publicam mentorias com dias e
-  horários disponíveis.
-- Um administrador aprova (ou rejeita) cada mentoria antes de ela ficar visível.
-- Alunos navegam pelas áreas, escolhem uma mentoria e reservam um horário,
-  presencial ou online.
+- Mentors sign up, list their areas and publish mentorships with available days
+  and times.
+- An administrator approves (or rejects) each mentorship before it becomes
+  visible.
+- Students browse the areas, pick a mentorship and book a time slot, in person
+  or online.
 
-## O que mudou em relação à V1
+## What changed since V1
 
-- **Banco:** Firebase (Firestore) → **PostgreSQL no Neon**. A camada de dados
-  virou repositórios (`backend/src/repositories`) e as respostas da API ao
-  frontend continuaram as mesmas.
-- **Hospedagem:** Heroku → **AWS**, com custo mínimo e provisionada por
-  **Terraform** (`backend/terraform`): CloudFront servindo o frontend (S3) e a
-  API (Lambda), segredos no SSM Parameter Store.
-- **Imagens (claim check):** a imagem não passa mais pela API. O navegador pede
-  um ticket, envia o arquivo direto ao S3 e a API recebe só a referência; uma
-  Lambda separada redimensiona a imagem de forma assíncrona.
-- **Correções:** o hash da senha não é mais devolvido pela API, um usuário não
-  consegue mais se promover a administrador, a senha não é apagada ao editar o
-  perfil sem trocá-la, e outros erros pontuais da V1.
-- **Dados de demonstração:** um seed (`npm run seed`) popula áreas, mentores,
-  mentorados e mentorias, para o app já estar pronto para uso.
-- **E-mail:** o envio está desligado por padrão (`EMAIL_ENABLED=false`).
+- **Database:** Firebase (Firestore) → **PostgreSQL on Neon**. The data layer
+  became repositories (`backend/src/repositories`) and the API responses to the
+  frontend stayed the same.
+- **Hosting:** Heroku → **AWS**, at minimal cost and provisioned with
+  **Terraform** (`backend/terraform`): CloudFront serving the frontend (S3) and
+  the API (Lambda), secrets in SSM Parameter Store.
+- **Images (claim check):** the image no longer goes through the API. The
+  browser asks for a ticket, uploads the file straight to S3 and the API only
+  receives the reference; a separate Lambda resizes the image asynchronously.
+- **Fixes:** the password hash is no longer returned by the API, a user can no
+  longer promote themselves to administrator, the password is no longer wiped
+  when editing the profile without changing it, and other small V1 bugs.
+- **Demo data:** a seed (`npm run seed`) populates areas, mentors, mentees and
+  mentorships, so the app is ready to use.
+- **E-mail:** sending is off by default (`EMAIL_ENABLED=false`).
 
-## Estrutura
+## Structure
 
 - `frontend/` — React (Create React App)
-- `backend/` — API Node.js + Express
-  - `db/schema.sql` — schema do Postgres
-  - `scripts/` — migração, seed, criação de admin e build da Lambda
-  - `terraform/` — infraestrutura AWS
+- `backend/` — Node.js + Express API
+  - `db/schema.sql` — Postgres schema
+  - `scripts/` — migration, seed, admin creation and Lambda build
+  - `terraform/` — AWS infrastructure
 
-## Rodando localmente
+## Running locally
 
 ```sh
 cd backend
-cp .env.example .env    # ajuste DB_URL para um Postgres local ou o Neon
+cp .env.example .env    # set DB_URL to a local Postgres or to Neon
 npm install
 npm run migrate
 npm run seed
@@ -60,13 +62,13 @@ npm install
 npm start
 ```
 
-## Deploy
+## Deployment
 
 ```sh
 cd backend
 npm run build:lambda
 cd terraform
-cp terraform.tfvars.example terraform.tfvars   # connection string do Neon
+cp terraform.tfvars.example terraform.tfvars   # Neon connection string
 tofu init && tofu apply
 ./scripts/deploy-frontend.sh
 ```
