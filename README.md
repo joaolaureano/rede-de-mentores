@@ -1,6 +1,6 @@
 # Rede de Mentores
 
-**[Leia em português / Read this in Portuguese](README.md)**
+**[Leia em português / Read this in Portuguese](README.pt-BR.md)**
 
 Academic project built at **AGES** (Agência Experimental de Engenharia de
 Software, PUCRS's experimental software engineering agency) in the 2020/1
