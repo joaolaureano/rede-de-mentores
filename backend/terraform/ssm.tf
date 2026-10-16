@@ -67,5 +67,5 @@ data "aws_iam_policy_document" "read_secrets" {
 resource "aws_ssm_parameter" "root_url" {
   name  = "${local.ssm_prefix}/ROOT_URL"
   type  = "String"
-  value = aws_cloudfront_distribution.app.domain_name
+  value = var.domain_name
 }

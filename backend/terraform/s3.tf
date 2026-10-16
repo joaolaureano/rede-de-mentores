@@ -71,13 +71,13 @@ resource "aws_s3_bucket_policy" "this" {
 }
 
 # O navegador posta a imagem direto no bucket (presigned POST): o CORS libera so
-# a origem do proprio app.
+# as origens do proprio app, o dominio proprio e o do CloudFront.
 resource "aws_s3_bucket_cors_configuration" "files" {
   bucket = aws_s3_bucket.files.id
 
   cors_rule {
     allowed_methods = ["POST"]
-    allowed_origins = ["https://${aws_cloudfront_distribution.app.domain_name}"]
+    allowed_origins = ["https://${var.domain_name}", "https://${aws_cloudfront_distribution.app.domain_name}"]
     allowed_headers = ["*"]
     max_age_seconds = 3000
   }
