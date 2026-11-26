@@ -22,9 +22,8 @@ resource "aws_cloudwatch_log_group" "api" {
   retention_in_days = 14
 }
 
-# Os mesmos poderes da AWSLambdaBasicExecutionRole, porem inline: a policy do
-# robot nega iam:AttachRolePolicy explicitamente, entao anexar a versao
-# gerenciada nao e uma opcao. Sem CreateLogGroup porque o grupo ja existe.
+# Os mesmos poderes da AWSLambdaBasicExecutionRole, porem inline. Sem
+# CreateLogGroup porque o grupo ja existe.
 data "aws_iam_policy_document" "lambda_logs" {
   statement {
     actions = [

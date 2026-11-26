@@ -24,9 +24,9 @@ variable "db_conn_string" {
 }
 
 variable "permissions_boundary_name" {
-  description = "Nome da policy usada como permissions boundary das roles criadas aqui. O robot so cria roles com ela; o ARN e montado com o ID da conta em uso, entao nada de especifico de conta fica versionado."
+  description = "Nome da policy usada como permissions boundary das roles criadas aqui: o teto da conta, que libera so recursos com o prefixo da tag Project da role. O ARN e montado com o ID da conta em uso, entao nada de especifico de conta fica versionado."
   type        = string
-  default     = "robot-ec2-boundary"
+  default     = "project-boundary"
 }
 
 variable "lambda_package" {
